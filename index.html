@@ -8,6 +8,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- مكتبة الرسم البياني Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- مكتبة قراءة واستيراد ملفات إكسل XLSX -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap');
         body { font-family: 'Cairo', sans-serif; background-color: #f0fdf4; }
@@ -16,7 +18,7 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
         @media print {
             body * { visibility: hidden; }
-            #printable-section, #printable-section *, #receipt-modal, #receipt-modal * { visibility: visible; }
+            #printable-section, #printable-section * { visibility: visible; }
             #printable-section { position: absolute; left: 0; top: 0; width: 100%; }
         }
     </style>
@@ -49,7 +51,7 @@
             <form onsubmit="handleLogin(event)" class="space-y-4">
                 <div>
                     <label class="block text-xs font-bold text-gray-600 mb-1">اسم المستخدم (Username):</label>
-                    <input type="text" id="login-username" placeholder="admin أو كود المعلم" required class="w-full px-4 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-emerald-300 outline-none">
+                    <input type="text" id="login-username" placeholder="admin أو كود الوكيل/المعلم" required class="w-full px-4 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-emerald-300 outline-none">
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-gray-600 mb-1">كلمة المرور (Password):</label>
@@ -80,7 +82,7 @@
             <button onclick="switchTab('supervision')" id="btn-supervision" class="tab-btn px-4 py-2 rounded-xl font-bold text-sm bg-emerald-600 text-white shrink-0 shadow-sm transition"><i class="fa-solid fa-clipboard-check"></i> الإشراف والمناوبة اليومية</button>
             <button onclick="switchTab('students')" id="btn-students" class="tab-btn px-4 py-2 rounded-xl font-bold text-sm text-gray-600 hover:bg-emerald-50 shrink-0 transition"><i class="fa-solid fa-users-line"></i> تسجيل الطلاب والمسارات</button>
             <button onclick="switchTab('attendance')" id="btn-attendance" class="tab-btn px-4 py-2 rounded-xl font-bold text-sm text-gray-600 hover:bg-emerald-50 shrink-0 transition"><i class="fa-solid fa-user-clock"></i> حضور وغياب اليوم</button>
-            <button onclick="switchTab('fees')" id="btn-fees" class="admin-only tab-btn px-4 py-2 rounded-xl font-bold text-sm text-gray-600 hover:bg-emerald-50 shrink-0 transition"><i class="fa-solid fa-file-invoice-dollar"></i> المصروفات المدرسية</button>
+            <button onclick="switchTab('fees')" id="admin-or-vice tab-btn px-4 py-2 rounded-xl font-bold text-sm text-gray-600 hover:bg-emerald-50 shrink-0 transition" style="display:inline-block;"><i class="fa-solid fa-file-invoice-dollar"></i> المصروفات المدرسية</button>
             <button onclick="switchTab('teachers')" id="btn-teachers" class="admin-only tab-btn px-4 py-2 rounded-xl font-bold text-sm text-gray-600 hover:bg-emerald-50 shrink-0 transition"><i class="fa-solid fa-chalkboard-user"></i> قاعدة بيانات المعلمين</button>
             <button onclick="switchTab('inventory')" id="btn-inventory" class="admin-only tab-btn px-4 py-2 rounded-xl font-bold text-sm text-gray-600 hover:bg-emerald-50 shrink-0 transition"><i class="fa-solid fa-boxes-packing"></i> جرد الكتب والمستلزمات</button>
             <button onclick="switchTab('expenses')" id="btn-expenses" class="admin-only tab-btn px-4 py-2 rounded-xl font-bold text-sm text-gray-600 hover:bg-emerald-50 shrink-0 transition"><i class="fa-solid fa-wallet"></i> مصروفات الصيانة والمبنى</button>
@@ -153,24 +155,30 @@
             </div>
         </div>
 
-        <!-- 2. شاشة تسجيل الطلاب والمسارات -->
+        <!-- 2. شاشة تسجيل الطلاب المتطورة حسب المراحل التعليمية -->
         <div id="tab-students" class="tab-content space-y-6">
             <div class="bg-white p-5 rounded-3xl shadow-sm border border-emerald-100 space-y-4">
-                <h2 class="text-lg font-black text-gray-800 flex items-center gap-2"><i class="fa-solid fa-user-plus text-emerald-600"></i> تسجيل طالب جديد واختيار الشعبة / المسار</h2>
-                <form onsubmit="saveStudent(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <h2 class="text-lg font-black text-gray-800 flex items-center gap-2"><i class="fa-solid fa-user-plus text-emerald-600"></i> تسجيل طالب جديد أو رفع كشف إكسل</h2>
+                    <label class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 cursor-pointer shadow transition">
+                        <i class="fa-solid fa-file-excel text-base"></i> استيراد الطلاب من ملف Excel
+                        <input type="file" accept=".xlsx, .xls, .csv" onchange="importStudentsExcel(event)" class="hidden">
+                    </label>
+                </div>
+
+                <form onsubmit="saveStudent(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
                     <input type="text" id="st-name" placeholder="اسم الطالب رباعي" required class="px-3.5 py-2.5 border rounded-xl text-sm outline-none">
                     <input type="text" id="st-code" placeholder="كود الطالب / الرقم القومي" required class="px-3.5 py-2.5 border rounded-xl text-sm outline-none font-mono">
-                    <select id="st-grade" required class="px-3.5 py-2.5 border rounded-xl bg-white text-sm outline-none">
-                        <option value="الصف الأول الثانوي">الصف الأول الثانوي</option>
-                        <option value="الصف الثاني الثانوي">الصف الثاني الثانوي</option>
-                        <option value="الصف الثالث الثانوي">الصف الثالث الثانوي</option>
+                    
+                    <select id="st-level" onchange="updateGradeAndTrackOptions()" required class="px-3.5 py-2.5 border rounded-xl bg-white text-sm outline-none font-bold text-emerald-800">
+                        <option value="المرحلة الثانوية">المرحلة الثانوية</option>
+                        <option value="المرحلة الإعدادية">المرحلة الإعدادية</option>
+                        <option value="المرحلة الابتدائية">المرحلة الابتدائية</option>
                     </select>
-                    <select id="st-track" required class="px-3.5 py-2.5 border rounded-xl bg-white text-sm outline-none font-bold text-teal-700">
-                        <option value="علمي علوم">مسار علمي علوم</option>
-                        <option value="علمي رياضة">مسار علمي رياضة</option>
-                        <option value="أدبي">مسار أدبي</option>
-                        <option value="عام (الصف الأول)">عام (الصف الأول)</option>
-                    </select>
+
+                    <select id="st-grade" required class="px-3.5 py-2.5 border rounded-xl bg-white text-sm outline-none"></select>
+                    <select id="st-track" required class="px-3.5 py-2.5 border rounded-xl bg-white text-sm outline-none font-bold text-teal-700"></select>
+
                     <input type="text" id="st-phone" placeholder="رقم هاتف ولي الأمر (واتساب)" required class="px-3.5 py-2.5 border rounded-xl text-sm outline-none">
                     <input type="number" id="st-seat" placeholder="رقم الجلوس" class="px-3.5 py-2.5 border rounded-xl text-sm outline-none font-bold">
                     <button type="submit" class="sm:col-span-2 lg:col-span-2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-xl text-sm transition shadow-lg shadow-teal-100">حفظ الطالب في قاعدة البيانات</button>
@@ -179,8 +187,8 @@
 
             <div class="bg-white p-5 rounded-3xl shadow-sm border border-emerald-100 space-y-4">
                 <div class="flex flex-col sm:flex-row justify-between items-center gap-3">
-                    <h2 class="text-lg font-black text-gray-800">قائمةطلاب المدرسة وتوزيع الشعب</h2>
-                    <input type="text" id="student-search" oninput="renderStudents()" placeholder="ابحث باسم الطالب أو الرقم القومي..." class="w-full sm:w-72 px-4 py-2 border rounded-xl text-sm outline-none">
+                    <h2 class="text-lg font-black text-gray-800">قائمة طلاب المدرسة وتوزيع الشعب والمراحل</h2>
+                    <input type="text" id="student-search" oninput="renderStudents()" placeholder="ابحث باسم الطالب، الكود، أو المرحلة..." class="w-full sm:w-72 px-4 py-2 border rounded-xl text-sm outline-none">
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-right text-sm">
@@ -188,7 +196,7 @@
                             <tr>
                                 <th class="p-3">الكود / الجلوس</th>
                                 <th class="p-3">اسم الطالب</th>
-                                <th class="p-3">الصف الدراسي</th>
+                                <th class="p-3">المرحلة والصف</th>
                                 <th class="p-3">الشعبة / المسار</th>
                                 <th class="p-3">هاتف ولي الأمر</th>
                                 <th class="p-3">إشعار الواتساب</th>
@@ -219,7 +227,7 @@
                             <tr>
                                 <th class="p-3">الكود</th>
                                 <th class="p-3">اسم الطالب</th>
-                                <th class="p-3">الصف والشعبة</th>
+                                <th class="p-3">المرحلة والصف</th>
                                 <th class="p-3">حالة اليوم</th>
                                 <th class="p-3">تطبيق حالة الحضور</th>
                             </tr>
@@ -230,8 +238,8 @@
             </div>
         </div>
 
-        <!-- 4. شاشة المصروفات المدرسية (مدير فقط) -->
-        <div id="tab-fees" class="tab-content admin-only space-y-6">
+        <!-- 4. شاشة المصروفات المدرسية (مدير ووكيل) -->
+        <div id="tab-fees" class="tab-content admin-or-vice-only space-y-6">
             <div class="bg-white p-5 rounded-3xl shadow-sm border border-emerald-100">
                 <h2 class="text-lg font-black text-gray-800 mb-4 flex items-center gap-2"><i class="fa-solid fa-coins text-emerald-600"></i> تحصيل المصروفات المدرسية والتبرعات الرسمية</h2>
                 <form onsubmit="saveFeeCollection(event)" class="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -263,29 +271,49 @@
 
         <!-- 5. قاعدة بيانات المعلمين (مدير فقط) -->
         <div id="tab-teachers" class="tab-content admin-only space-y-6">
-            <div class="bg-white p-5 rounded-3xl shadow-sm border border-emerald-100">
-                <h2 class="text-lg font-black text-gray-800 mb-4 flex items-center gap-2"><i class="fa-solid fa-chalkboard-user text-emerald-600"></i> تسجيل معلم جديد وصحيفة أحوال</h2>
-                <form onsubmit="saveTeacher(event)" class="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                    <input type="text" id="t-name" placeholder="اسم المعلم ثلاثي / رباعي" required class="px-3.5 py-2.5 border rounded-xl text-sm outline-none">
-                    <input type="text" id="t-code" placeholder="كود المعلم" required class="px-3.5 py-2.5 border rounded-xl text-sm outline-none font-mono">
-                    <input type="text" id="t-subject" placeholder="مادة التدريس (مثل: علم نفس / لغة عربية)" required class="px-3.5 py-2.5 border rounded-xl text-sm outline-none">
-                    <select id="t-degree" required class="px-3.5 py-2.5 border rounded-xl bg-white text-sm outline-none">
-                        <option value="معلم كبیر">معلم كبير</option>
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-emerald-100 space-y-4">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <h2 class="text-lg font-black text-gray-800 flex items-center gap-2"><i class="fa-solid fa-chalkboard-user text-emerald-600"></i> تسجيل معلم أو وكيل جديد أو استيراد إكسل</h2>
+                    <label class="bg-teal-600 hover:bg-teal-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 cursor-pointer shadow transition">
+                        <i class="fa-solid fa-file-excel text-base"></i> استيراد المعلمين من ملف Excel
+                        <input type="file" accept=".xlsx, .xls, .csv" onchange="importTeachersExcel(event)" class="hidden">
+                    </label>
+                </div>
+
+                <form onsubmit="saveTeacher(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+                    <input type="text" id="t-name" placeholder="اسم المعلم / الوكيل ثلاثي" required class="px-3.5 py-2.5 border rounded-xl text-sm outline-none">
+                    <input type="text" id="t-code" placeholder="كود المستخدم (اسم الدخول)" required class="px-3.5 py-2.5 border rounded-xl text-sm outline-none font-mono">
+                    <input type="text" id="t-national-id" maxlength="14" placeholder="الرقم القومي (14 رقم)" required class="px-3.5 py-2.5 border rounded-xl text-sm outline-none font-mono">
+                    <input type="text" id="t-phone" placeholder="رقم الهاتف / واتساب" required class="px-3.5 py-2.5 border rounded-xl text-sm outline-none font-mono">
+                    <input type="text" id="t-qualification" placeholder="المؤهل الدراسي" required class="px-3.5 py-2.5 border rounded-xl text-sm outline-none">
+                    <input type="text" id="t-subject" placeholder="مادة التدريس أو الإشراف" required class="px-3.5 py-2.5 border rounded-xl text-sm outline-none">
+                    <select id="t-degree" required class="px-3.5 py-2.5 border rounded-xl bg-white text-sm outline-none font-bold text-amber-700">
+                        <option value="وكيل مدرسة">وكيل مدرسة (صلاحية إدارية)</option>
+                        <option value="معلم كبير">معلم كبير</option>
                         <option value="معلم خبير">معلم خبير</option>
                         <option value="معلم أول أ">معلم أول أ</option>
                         <option value="معلم أول">معلم أول</option>
                         <option value="معلم">معلم</option>
                         <option value="أخصائي نفسي / اجتماعي">أخصائي نفسي / اجتماعي</option>
                     </select>
-                    <button type="submit" class="sm:col-span-4 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-xl text-sm transition shadow-lg shadow-teal-100">حفظ بيانات المعلم في المدرسة</button>
+                    <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 rounded-xl text-sm transition shadow-lg shadow-teal-100">حفظ في النظام</button>
                 </form>
             </div>
+
             <div class="bg-white p-5 rounded-3xl shadow-sm border border-emerald-100">
-                <h2 class="text-lg font-black text-gray-800 mb-4">قائمة هيئة التدريس والعاملين بالمدرسة</h2>
+                <h2 class="text-lg font-black text-gray-800 mb-4">قائمة هيئة التدريس والوكلاء والعاملين بالمدرسة</h2>
                 <div class="overflow-x-auto">
                     <table class="w-full text-right text-sm">
                         <thead class="bg-gray-50 border-b text-gray-500 text-xs">
-                            <tr><th class="p-3">الكود</th><th class="p-3">اسم المعلم</th><th class="p-3">مادة التدريس</th><th class="p-3">الدرجة الوظيفية</th><th class="p-3">إجراءات</th></tr>
+                            <tr>
+                                <th class="p-3">الكود / القومي</th>
+                                <th class="p-3">الاسم</th>
+                                <th class="p-3">الهاتف</th>
+                                <th class="p-3">المؤهل الدراسي</th>
+                                <th class="p-3">التخصص / المادة</th>
+                                <th class="p-3">الدرجة / الوظيفة</th>
+                                <th class="p-3">إجراءات</th>
+                            </tr>
                         </thead>
                         <tbody id="teachers-table-body"></tbody>
                     </table>
@@ -352,7 +380,7 @@
                         <h4 id="rep-scientific-count" class="text-2xl font-black mt-1">0 طالب</h4>
                     </div>
                     <div class="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20">
-                        <p class="text-xs text-emerald-100 font-bold">إجمالي طلاب الشعبة الأدبية</p>
+                        <p class="text-xs text-emerald-100 font-bold">إجمالي طلاب الشعبة الأدبية / العام</p>
                         <h4 id="rep-literary-count" class="text-2xl font-black mt-1">0 طالب</h4>
                     </div>
                     <div class="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20">
@@ -471,11 +499,11 @@
                 { id: 2, date: '2026-10-10', place: 'البوابة الرئيسية', teacher: 'أ/ معلم أحمد علي', notes: 'التزام بمواعيد الدخول' }
             ],
             students: JSON.parse(localStorage.getItem('qazzaz_school_students')) || [
-                { id: "101", code: '3050101001', name: 'أحمد محمد عبد العال', grade: 'الصف الثالث الثانوي', track: 'علمي علوم', phone: '01012345678', seat: 1001 },
-                { id: "102", code: '3050101002', name: 'محمود إبراهيم القزاز', grade: 'الصف الثاني الثانوي', track: 'علمي رياضة', phone: '01098765432', seat: 1002 }
+                { id: "101", code: '3050101001', name: 'أحمد محمد عبد العال', level: 'المرحلة الثانوية', grade: 'الصف الثالث الثانوي', track: 'علمي علوم', phone: '01012345678', seat: 1001 }
             ],
             teachers: JSON.parse(localStorage.getItem('qazzaz_school_teachers')) || [
-                { id: "T101", code: '20101', name: 'م / محمد عبدالوهاب القزاز', subject: 'علم النفس والتربية', degree: 'أخصائي نفسي / اجتماعي' }
+                { id: "T101", code: '20101', nationalId: '29301011234567', phone: '01000000000', qualification: 'بكالوريوس تربية وعلم نفس', name: 'م / محمد عبدالوهاب القزاز', subject: 'علم النفس والتربية', degree: 'أخصائي نفسي / اجتماعي' },
+                { id: "T102", code: 'vice2026', nationalId: '28001011234567', phone: '01099999999', qualification: 'ليسانس آداب وتربية', name: 'أ/ أميرة علي شلبي', subject: 'إدارة وتوجيه إداري', degree: 'وكيل مدرسة' }
             ],
             fees: JSON.parse(localStorage.getItem('qazzaz_school_fees')) || [],
             inventory: JSON.parse(localStorage.getItem('qazzaz_school_inventory')) || [
@@ -484,6 +512,42 @@
             expenses: JSON.parse(localStorage.getItem('qazzaz_school_expenses')) || [],
             attendance: JSON.parse(localStorage.getItem('qazzaz_school_attendance')) || {}
         };
+
+        function updateGradeAndTrackOptions() {
+            let level = document.getElementById('st-level').value;
+            let gradeSel = document.getElementById('st-grade');
+            let trackSel = document.getElementById('st-track');
+
+            gradeSel.innerHTML = '';
+            trackSel.innerHTML = '';
+
+            if (level === 'المرحلة الثانوية') {
+                gradeSel.innerHTML = `
+                    <option value="الصف الأول الثانوي">الصف الأول الثانوي</option>
+                    <option value="الصف الثاني الثانوي">الصف الثاني الثانوي</option>
+                    <option value="الصف الثالث الثانوي">الصف الثالث الثانوي</option>`;
+                trackSel.innerHTML = `
+                    <option value="علمي علوم">مسار علمي علوم</option>
+                    <option value="علمي رياضة">مسار علمي رياضة</option>
+                    <option value="أدبي">مسار أدبي</option>
+                    <option value="عام (الصف الأول)">عام (الصف الأول)</option>`;
+            } else if (level === 'المرحلة الإعدادية') {
+                gradeSel.innerHTML = `
+                    <option value="الصف الأول الإعدادي">الصف الأول الإعدادي</option>
+                    <option value="الصف الثاني الإعدادي">الصف الثاني الإعدادي</option>
+                    <option value="الصف الثالث الإعدادي">الصف الثالث الإعدادي</option>`;
+                trackSel.innerHTML = `<option value="تعليم أساسي عام">تعليم أساسي عام</option>`;
+            } else if (level === 'المرحلة الابتدائية') {
+                gradeSel.innerHTML = `
+                    <option value="الصف الأول الابتدائي">الصف الأول الابتدائي</option>
+                    <option value="الصف الثاني الابتدائي">الصف الثاني الابتدائي</option>
+                    <option value="الصف الثالث الابتدائي">الصف الثالث الابتدائي</option>
+                    <option value="الصف الرابع الابتدائي">الصف الرابع الابتدائي</option>
+                    <option value="الصف الخامس الابتدائي">الصف الخامس الابتدائي</option>
+                    <option value="الصف السادس الابتدائي">الصف السادس الابتدائي</option>`;
+                trackSel.innerHTML = `<option value="عام ابتدائية">عام ابتدائية</option>`;
+            }
+        }
 
         function handleLogin(e) {
             e.preventDefault();
@@ -495,7 +559,8 @@
             } else {
                 let foundTeacher = db.teachers.find(t => t.code === u);
                 if(foundTeacher && p === '1234') {
-                    currentUser = { name: foundTeacher.name, role: 'teacher' };
+                    let role = foundTeacher.degree === 'وكيل مدرسة' ? 'vice' : 'teacher';
+                    currentUser = { name: foundTeacher.name, role: role };
                 } else {
                     alert('اسم المستخدم أو كلمة المرور غير صحيحة!');
                     return;
@@ -503,7 +568,8 @@
             }
 
             document.getElementById('login-screen').style.display = 'none';
-            document.getElementById('user-role-badge').innerText = `${currentUser.name} (${currentUser.role === 'admin' ? 'مدير المدرسة' : 'معلم / مشرف'})`;
+            let roleTitle = currentUser.role === 'admin' ? 'مدير المدرسة' : (currentUser.role === 'vice' ? 'وكيل المدرسة' : 'معلم / مشرف');
+            document.getElementById('user-role-badge').innerText = `${currentUser.name} (${roleTitle})`;
             
             applyRolePermissions();
             renderAll();
@@ -512,7 +578,17 @@
 
         function applyRolePermissions() {
             const adminElements = document.querySelectorAll('.admin-only');
+            const adminOrViceElements = document.querySelectorAll('.admin-or-vice-only');
+
             adminElements.forEach(el => {
+                if (currentUser && currentUser.role !== 'admin') {
+                    el.style.display = 'none';
+                } else {
+                    el.style.display = '';
+                }
+            });
+
+            adminOrViceElements.forEach(el => {
                 if (currentUser && currentUser.role === 'teacher') {
                     el.style.display = 'none';
                 } else {
@@ -526,7 +602,7 @@
             document.getElementById('login-username').value = '';
             document.getElementById('login-password').value = '';
             document.getElementById('login-screen').style.display = 'flex'; 
-            document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
+            document.querySelectorAll('.admin-only, .admin-or-vice-only').forEach(el => el.style.display = '');
         }
 
         function saveData() {
@@ -548,7 +624,7 @@
             if(btn) btn.classList.add('bg-emerald-600', 'text-white', 'shadow-sm');
             
             if(tabId === 'supervision') renderSupervision();
-            if(tabId === 'students') renderStudents();
+            if(tabId === 'students') { updateGradeAndTrackOptions(); renderStudents(); }
             if(tabId === 'attendance') renderAttendanceTab();
             if(tabId === 'fees') { renderFees(); renderStudentDropdown(); }
             if(tabId === 'teachers') renderTeachers();
@@ -576,6 +652,76 @@
             document.getElementById('stat-total-students').innerText = `${totalStudents} طالب`;
             document.getElementById('stat-active-supervisors').innerText = `${activeSupervisors} معلم`;
             document.getElementById('stat-total-fees').innerText = totalFees.toFixed(2) + " " + storeConfig.currency;
+        }
+
+        function importStudentsExcel(e) {
+            let file = e.target.files[0];
+            if(!file) return;
+            let reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    let data = new Uint8Array(evt.target.result);
+                    let workbook = XLSX.read(data, { type: 'array' });
+                    let json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+
+                    let addedCount = 0;
+                    json.forEach(row => {
+                        let name = row['اسم الطالب'] || row['اسم'] || row['الاسم'] || row['Name'];
+                        let code = (row['الكود'] || row['كود الطالب'] || row['الرقم القومي'] || row['Code'] || Date.now()).toString();
+                        let level = row['المرحلة'] || row['المرحلة التعليمية'] || 'المرحلة الثانوية';
+                        let grade = row['الصف'] || row['الصف الدراسي'] || row['Grade'] || 'الصف الأول الثانوي';
+                        let track = row['الشعبة'] || row['المسار'] || row['Track'] || 'عام';
+                        let phone = (row['الهاتف'] || row['رقم هاتف ولي الأمر'] || row['Phone'] || '01000000000').toString();
+                        let seat = row['رقم الجلوس'] || row['الجلوس'] || '-';
+
+                        if(name && !db.students.some(s => s.code.toString() === code.toString())) {
+                            db.students.push({ id: Date.now() + Math.random().toString(), code, name, level, grade, track, phone, seat });
+                            addedCount++;
+                        }
+                    });
+
+                    saveData();
+                    alert(`تم استيراد ${addedCount} طالب بنجاح من ملف الإكسل!`);
+                } catch(err) {
+                    alert('حدث خطأ أثناء قراءة ملف الإكسل!');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function importTeachersExcel(e) {
+            let file = e.target.files[0];
+            if(!file) return;
+            let reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    let data = new Uint8Array(evt.target.result);
+                    let workbook = XLSX.read(data, { type: 'array' });
+                    let json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+
+                    let addedCount = 0;
+                    json.forEach(row => {
+                        let name = row['اسم المعلم'] || row['اسم'] || row['الاسم'] || row['Name'];
+                        let code = (row['كود المعلم'] || row['الكود'] || row['Code'] || Date.now()).toString();
+                        let nationalId = (row['الرقم القومي'] || row['NationalID'] || '-').toString();
+                        let phone = (row['الهاتف'] || row['رقم الهاتف'] || row['Phone'] || '-').toString();
+                        let qualification = row['المؤهل الدراسي'] || row['المؤهل'] || row['Qualification'] || '-';
+                        let subject = row['المادة'] || row['مادة التدريس'] || row['Subject'] || 'عام';
+                        let degree = row['الدرجة الوظيفية'] || row['الدرجة'] || row['Degree'] || 'معلم';
+
+                        if(name && !db.teachers.some(t => t.code.toString() === code.toString())) {
+                            db.teachers.push({ id: Date.now() + Math.random().toString(), code, nationalId, phone, qualification, name, subject, degree });
+                            addedCount++;
+                        }
+                    });
+
+                    saveData();
+                    alert(`تم استيراد ${addedCount} معلم/وكيل بنجاح من ملف الإكسل!`);
+                } catch(err) {
+                    alert('حدث خطأ أثناء قراءة ملف الإكسل!');
+                }
+            };
+            reader.readAsArrayBuffer(file);
         }
 
         function saveSupervision(e) {
@@ -618,6 +764,7 @@
                 id: Date.now().toString(),
                 code: document.getElementById('st-code').value.trim(),
                 name: document.getElementById('st-name').value.trim(),
+                level: document.getElementById('st-level').value,
                 grade: document.getElementById('st-grade').value,
                 track: document.getElementById('st-track').value,
                 phone: document.getElementById('st-phone').value.trim(),
@@ -625,7 +772,7 @@
             });
             e.target.reset();
             saveData();
-            alert('تم تسجيل الطالب وشعبته بنجاح!');
+            alert('تم تسجيل الطالب بنجاح!');
         }
 
         function renderStudents() {
@@ -633,7 +780,7 @@
             if(!tbody) return;
             tbody.innerHTML = '';
             let term = document.getElementById('student-search') ? document.getElementById('student-search').value.toLowerCase() : '';
-            let filtered = db.students.filter(s => s.name.toLowerCase().includes(term) || s.code.includes(term));
+            let filtered = db.students.filter(s => s.name.toLowerCase().includes(term) || s.code.includes(term) || (s.level && s.level.toLowerCase().includes(term)));
 
             if(filtered.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-gray-400">لا يوجد طلاب مطابقون للبحث</td></tr>`;
@@ -642,14 +789,14 @@
 
             filtered.forEach(s => {
                 let cleanPhone = s.phone.replace(/[^0-9]/g, '');
-                let waText = encodeURIComponent(`مرحباً ولي أمر الطالب (${s.name})، نود إحاطتكم بأنه مسجل بـ (${s.grade} - ${s.track}). إدارة ${storeConfig.name}.`);
+                let waText = encodeURIComponent(`مرحباً ولي أمر الطالب (${s.name})، نود إحاطتكم بأنه مسجل بـ (${s.level || 'المرحلة الثانوية'} - ${s.grade} - ${s.track}). إدارة ${storeConfig.name}.`);
                 let waLink = `https://wa.me/${cleanPhone}?text=${waText}`;
 
                 tbody.innerHTML += `
                     <tr class="border-b">
                         <td class="p-3 font-mono font-bold text-emerald-600">${s.code}<br><span class="text-xs text-gray-400 font-normal">جلوس: ${s.seat}</span></td>
                         <td class="p-3 font-semibold text-gray-800">${s.name}</td>
-                        <td class="p-3 text-xs text-gray-600">${s.grade}</td>
+                        <td class="p-3 text-xs text-gray-600 font-bold">${s.level || 'المرحلة الثانوية'}<br><span class="font-normal text-gray-500">${s.grade}</span></td>
                         <td class="p-3 font-bold text-teal-700">${s.track}</td>
                         <td class="p-3 font-mono text-xs">${s.phone}</td>
                         <td class="p-3"><a href="${waLink}" target="_blank" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl text-xs inline-flex items-center gap-1"><i class="fa-brands fa-whatsapp"></i> إرسال إشعار</a></td>
@@ -736,13 +883,16 @@
             db.teachers.push({
                 id: Date.now().toString(),
                 code: document.getElementById('t-code').value.trim(),
+                nationalId: document.getElementById('t-national-id').value.trim(),
+                phone: document.getElementById('t-phone').value.trim(),
+                qualification: document.getElementById('t-qualification').value.trim(),
                 name: document.getElementById('t-name').value.trim(),
                 subject: document.getElementById('t-subject').value.trim(),
                 degree: document.getElementById('t-degree').value
             });
             e.target.reset();
             saveData();
-            alert('تم تسجيل بيانات المعلم بنجاح!');
+            alert('تم تسجيل بيانات المعلم أو الوكيل بنجاح!');
         }
 
         function renderTeachers() {
@@ -750,12 +900,16 @@
             if(!tbody) return;
             tbody.innerHTML = '';
             db.teachers.forEach(t => {
+                let isVice = t.degree === 'وكيل مدرسة';
+                let badgeClass = isVice ? 'bg-amber-100 text-amber-800 font-black' : 'bg-blue-50 text-blue-700';
                 tbody.innerHTML += `
                     <tr class="border-b">
-                        <td class="p-3 font-mono text-emerald-600 font-bold">${t.code}</td>
+                        <td class="p-3 font-mono text-emerald-600 font-bold">${t.code}<br><span class="text-xs text-gray-400 font-normal">القومي: ${t.nationalId || '-'}</span></td>
                         <td class="p-3 font-semibold text-gray-800">${t.name}</td>
+                        <td class="p-3 font-mono text-xs text-gray-600">${t.phone || '-'}</td>
+                        <td class="p-3 text-xs font-semibold text-gray-700">${t.qualification || '-'}</td>
                         <td class="p-3 text-sm font-bold text-teal-700">${t.subject}</td>
-                        <td class="p-3 text-xs font-bold text-blue-700 bg-blue-50 rounded-lg">${t.degree}</td>
+                        <td class="p-3 text-xs font-bold ${badgeClass} rounded-lg p-1 text-center">${t.degree}</td>
                         <td class="p-3"><button onclick="db.teachers = db.teachers.filter(x => x.id !== '${t.id}');saveData()" class="text-rose-500"><i class="fa-solid fa-trash"></i></button></td>
                     </tr>`;
             });
@@ -807,8 +961,8 @@
         }
 
         function updateReports() {
-            let scientificCount = db.students.filter(s => s.track.includes('علمي')).length;
-            let literaryCount = db.students.filter(s => s.track.includes('أدبي')).length;
+            let scientificCount = db.students.filter(s => s.track && s.track.includes('علمي')).length;
+            let literaryCount = db.students.filter(s => s.track && (s.track.includes('أدبي') || s.track.includes('عام'))).length;
             let feesSum = db.fees.reduce((s, x) => s + x.amount, 0);
 
             document.getElementById('rep-scientific-count').innerText = `${scientificCount} طالب`;
@@ -819,17 +973,17 @@
         function renderTrackChart() {
             let ctx = document.getElementById('schoolTrackChart');
             if(!ctx) return;
-            let sci = db.students.filter(s => s.track.includes('علمي علوم')).length;
-            let math = db.students.filter(s => s.track.includes('علمي رياضة')).length;
-            let lit = db.students.filter(s => s.track.includes('أدبي')).length;
-            let gen = db.students.filter(s => s.track.includes('عام')).length;
+            let sci = db.students.filter(s => s.track && s.track.includes('علمي علوم')).length;
+            let math = db.students.filter(s => s.track && s.track.includes('علمي رياضة')).length;
+            let lit = db.students.filter(s => s.track && s.track.includes('أدبي')).length;
+            let gen = db.students.filter(s => s.track && (s.track.includes('عام') || s.track.includes('تعليم أساسي'))).length;
 
             if (trackChartInstance) trackChartInstance.destroy();
 
             trackChartInstance = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
-                    labels: ['علمي علوم', 'علمي رياضة', 'أدبي', 'عام (أولى ثانوي)'],
+                    labels: ['علمي علوم', 'علمي رياضة', 'أدبي', 'عام / ابتدائي / إعدادي'],
                     datasets: [{
                         data: [sci, math, lit, gen],
                         backgroundColor: ['#059669', '#0284c7', '#d97706', '#6b7280']
@@ -857,8 +1011,10 @@
             r.readAsText(f);
         }
 
-        window.onload = function() { checkLicenseStatus(); };
+        window.onload = function() {
+            checkLicenseStatus();
+            updateGradeAndTrackOptions();
+        };
     </script>
 </body>
 </html>
-
