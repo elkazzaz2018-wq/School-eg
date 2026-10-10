@@ -1,1 +1,864 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="page-title">نظام البوابة الرقمية لإدارة المدارس الرسمية</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- مكتبة الرسم البياني Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap');
+        body { font-family: 'Cairo', sans-serif; background-color: #f0fdf4; }
+        .tab-content { display: none; animation: fadeIn 0.3s ease-in-out; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        @media print {
+            body * { visibility: hidden; }
+            #printable-section, #printable-section *, #receipt-modal, #receipt-modal * { visibility: visible; }
+            #printable-section { position: absolute; left: 0; top: 0; width: 100%; }
+        }
+    </style>
+</head>
+<body class="bg-emerald-50/40 min-h-screen flex flex-col text-gray-800">
+
+    <!-- شاشة إدخال مفتاح التفعيل -->
+    <div id="license-screen" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 hidden backdrop-blur-sm">
+        <div class="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl border-4 border-emerald-500 text-center space-y-4">
+            <div class="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto text-emerald-600 text-2xl shadow-inner">
+                <i class="fa-solid fa-key"></i>
+            </div>
+            <h2 class="text-2xl font-black text-gray-800">تفعيل ترخيص النظام المدرسي</h2>
+            <p class="text-xs text-gray-500">أدخل مفتاح التفعيل المعتمد لإدارة المدرسة الرسمية بكامل الصلاحيات</p>
+            <input type="text" id="license-input" placeholder="QAZZAZ-SCHOOL-2026-VIP" class="w-full px-4 py-3 border-2 border-emerald-200 rounded-xl text-center font-mono font-bold uppercase focus:ring-4 focus:ring-emerald-100 focus:border-emerald-500 outline-none transition">
+            <button onclick="verifyAndActivateLicense()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold p-3.5 rounded-xl shadow-lg shadow-emerald-200 transition">تفعيل الترخيص والدخول</button>
+        </div>
+    </div>
+
+    <!-- شاشة تسجيل الدخول -->
+    <div id="login-screen" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl space-y-5">
+            <div class="text-center space-y-1">
+                <div class="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto text-emerald-600 text-2xl shadow-inner mb-2">
+                    <i class="fa-solid fa-school"></i>
+                </div>
+                <h2 id="modal-store-name" class="text-2xl font-black text-gray-800">بوابة إدارة المدرسة الرسمية</h2>
+                <p class="text-xs text-gray-400">نظام الإدارة المدرسية وشؤون الطلاب والمعلمين</p>
+            </div>
+            <form onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-1">اسم المستخدم (Username):</label>
+                    <input type="text" id="login-username" placeholder="admin أو كود المعلم" required class="w-full px-4 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-emerald-300 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-1">كلمة المرور (Password):</label>
+                    <input type="password" id="login-password" placeholder="••••" required class="w-full px-4 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-emerald-300 outline-none">
+                </div>
+                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold p-3.5 rounded-xl shadow-lg shadow-emerald-200 transition text-sm">دخول لوحة التحكم المدرسية</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- شريط التنقل العلوي -->
+    <header class="bg-gradient-to-r from-emerald-800 to-teal-900 text-white shadow-lg">
+        <div class="container mx-auto px-4 py-3.5 flex flex-col sm:flex-row justify-between items-center gap-2">
+            <div>
+                <h1 id="header-store-name" class="text-lg font-black flex items-center gap-2 tracking-wide"><i class="fa-solid fa-graduation-cap"></i> مدرسة معمل القزاز الثانوية المشتركة - البوابة الرقمية</h1>
+                <p class="text-[11px] text-emerald-100 font-semibold mt-0.5"><i class="fa-solid fa-code"></i> إعداد وتطوير: م / محمد عبدالوهاب القزاز (أخصائي نفسي / مطور برمجيات)</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <span id="user-role-badge" class="text-xs bg-black/25 backdrop-blur-md px-3.5 py-1.5 rounded-full font-bold border border-white/10"></span>
+                <button onclick="logout()" class="text-xs bg-teal-900/80 hover:bg-teal-900 px-3 py-1.5 rounded-lg font-semibold transition border border-white/10"><i class="fa-solid fa-power-off"></i> خروج</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- الأزرار الرئيسية للتبويبات -->
+    <nav class="bg-white shadow-sm border-b sticky top-0 z-30">
+        <div class="container mx-auto px-4 flex overflow-x-auto gap-2 py-2.5 no-scrollbar">
+            <button onclick="switchTab('supervision')" id="btn-supervision" class="tab-btn px-4 py-2 rounded-xl font-bold text-sm bg-emerald-600 text-white shrink-0 shadow-sm transition"><i class="fa-solid fa-clipboard-check"></i> الإشراف والمناوبة اليومية</button>
+            <button onclick="switchTab('students')" id="btn-students" class="tab-btn px-4 py-2 rounded-xl font-bold text-sm text-gray-600 hover:bg-emerald-50 shrink-0 transition"><i class="fa-solid fa-users-line"></i> تسجيل الطلاب والمسارات</button>
+            <button onclick="switchTab('attendance')" id="btn-attendance" class="tab-btn px-4 py-2 rounded-xl font-bold text-sm text-gray-600 hover:bg-emerald-50 shrink-0 transition"><i class="fa-solid fa-user-clock"></i> حضور وغياب اليوم</button>
+            <button onclick="switchTab('fees')" id="btn-fees" class="admin-only tab-btn px-4 py-2 rounded-xl font-bold text-sm text-gray-600 hover:bg-emerald-50 shrink-0 transition"><i class="fa-solid fa-file-invoice-dollar"></i> المصروفات المدرسية</button>
+            <button onclick="switchTab('teachers')" id="btn-teachers" class="admin-only tab-btn px-4 py-2 rounded-xl font-bold text-sm text-gray-600 hover:bg-emerald-50 shrink-0 transition"><i class="fa-solid fa-chalkboard-user"></i> قاعدة بيانات المعلمين</button>
+            <button onclick="switchTab('inventory')" id="btn-inventory" class="admin-only tab-btn px-4 py-2 rounded-xl font-bold text-sm text-gray-600 hover:bg-emerald-50 shrink-0 transition"><i class="fa-solid fa-boxes-packing"></i> جرد الكتب والمستلزمات</button>
+            <button onclick="switchTab('expenses')" id="btn-expenses" class="admin-only tab-btn px-4 py-2 rounded-xl font-bold text-sm text-gray-600 hover:bg-emerald-50 shrink-0 transition"><i class="fa-solid fa-wallet"></i> مصروفات الصيانة والمبنى</button>
+            <button onclick="switchTab('reports')" id="btn-reports" class="admin-only tab-btn px-4 py-2 rounded-xl font-bold text-sm text-gray-600 hover:bg-emerald-50 shrink-0 transition"><i class="fa-solid fa-chart-line"></i> الإحصائيات المدرسية</button>
+            <button onclick="switchTab('settings')" id="btn-settings" class="admin-only tab-btn px-4 py-2 rounded-xl font-bold text-sm text-gray-600 hover:bg-emerald-50 shrink-0 transition"><i class="fa-solid fa-gear"></i> إعدادات المدرسة</button>
+        </div>
+    </nav>
+
+    <!-- المحتوى الرئيسي -->
+    <main class="container mx-auto px-4 py-6 flex-grow space-y-6">
+
+        <!-- بطاقات المؤشرات السريعة لإدارة المدرسة -->
+        <div id="admin-stats-bar" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 admin-only">
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-emerald-100 flex items-center justify-between">
+                <div><p class="text-xs text-gray-400 font-bold">إجمالي طلاب المدرسة</p><h3 id="stat-total-students" class="text-xl font-black text-emerald-600 mt-1">0 طالب</h3></div>
+                <div class="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 text-lg"><i class="fa-solid fa-user-graduate"></i></div>
+            </div>
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-emerald-100 flex items-center justify-between">
+                <div><p class="text-xs text-gray-400 font-bold">معلمو الإشراف اليوم</p><h3 id="stat-active-supervisors" class="text-xl font-black text-amber-600 mt-1">0 معلم</h3></div>
+                <div class="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 text-lg"><i class="fa-solid fa-clipboard-user"></i></div>
+            </div>
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-emerald-100 flex items-center justify-between">
+                <div><p class="text-xs text-gray-400 font-bold">نسبة حضور الطلاب اليوم</p><h3 id="stat-attendance-rate" class="text-xl font-black text-teal-600 mt-1">100%</h3></div>
+                <div class="w-12 h-12 bg-teal-50 rounded-2xl flex items-center justify-center text-teal-600 text-lg"><i class="fa-solid fa-chart-pie"></i></div>
+            </div>
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-emerald-100 flex items-center justify-between">
+                <div><p class="text-xs text-gray-400 font-bold">المصروفات المدرسية المحصلة</p><h3 id="stat-total-fees" class="text-xl font-black text-blue-600 mt-1">0.00 ج.م</h3></div>
+                <div class="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 text-lg"><i class="fa-solid fa-coins"></i></div>
+            </div>
+        </div>
+
+        <!-- 1. شاشة الإشراف والمناوبة اليومية -->
+        <div id="tab-supervision" class="tab-content active space-y-6">
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-emerald-100 space-y-4">
+                <h2 class="text-lg font-black text-gray-800 flex items-center gap-2"><i class="fa-solid fa-shield-halved text-emerald-600"></i> توزيع خطة الإشراف اليومي والمناوبة</h2>
+                <form onsubmit="saveSupervision(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <input type="date" id="sup-date" required class="px-3.5 py-2.5 border rounded-xl text-sm outline-none">
+                    <select id="sup-place" required class="px-3.5 py-2.5 border rounded-xl bg-white text-sm outline-none font-bold text-gray-700">
+                        <option value="الفناء المدرسي">إشراف الفناء المدرسي</option>
+                        <option value="البوابة الرئيسية">إشراف البوابة الرئيسية</option>
+                        <option value="الدور الأرضي والأول">إشراف الدور الأرضي والأول</option>
+                        <option value="الدور الثاني والثالث">إشراف الدور الثاني والثالث</option>
+                        <option value="طابور الصباح">إشراف طابور الصباح</option>
+                    </select>
+                    <input type="text" id="sup-teacher" placeholder="اسم المعلم المشرف" required class="px-3.5 py-2.5 border rounded-xl text-sm outline-none">
+                    <input type="text" id="sup-notes" placeholder="ملاحظات الانضباط أو المخالفات" class="px-3.5 py-2.5 border rounded-xl text-sm outline-none">
+                    <button type="submit" class="sm:col-span-2 lg:col-span-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-sm transition shadow-lg shadow-emerald-100">تسجيل وتوثيق الإشراف اليومي</button>
+                </form>
+            </div>
+
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-emerald-100 space-y-4">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-lg font-black text-gray-800">سجل إشراف المدرسة والانضباط اليومي</h2>
+                    <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-xl text-xs transition"><i class="fa-solid fa-print"></i> طباعة دفتر الإشراف</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-right text-sm">
+                        <thead class="bg-gray-50 border-b text-gray-500 text-xs">
+                            <tr>
+                                <th class="p-3">التاريخ</th>
+                                <th class="p-3">موقع الإشراف</th>
+                                <th class="p-3">المعلم المشرف</th>
+                                <th class="p-3">الملاحظات والانضباط</th>
+                                <th class="p-3">إجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="supervision-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. شاشة تسجيل الطلاب والمسارات -->
+        <div id="tab-students" class="tab-content space-y-6">
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-emerald-100 space-y-4">
+                <h2 class="text-lg font-black text-gray-800 flex items-center gap-2"><i class="fa-solid fa-user-plus text-emerald-600"></i> تسجيل طالب جديد واختيار الشعبة / المسار</h2>
+                <form onsubmit="saveStudent(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <input type="text" id="st-name" placeholder="اسم الطالب رباعي" required class="px-3.5 py-2.5 border rounded-xl text-sm outline-none">
+                    <input type="text" id="st-code" placeholder="كود الطالب / الرقم القومي" required class="px-3.5 py-2.5 border rounded-xl text-sm outline-none font-mono">
+                    <select id="st-grade" required class="px-3.5 py-2.5 border rounded-xl bg-white text-sm outline-none">
+                        <option value="الصف الأول الثانوي">الصف الأول الثانوي</option>
+                        <option value="الصف الثاني الثانوي">الصف الثاني الثانوي</option>
+                        <option value="الصف الثالث الثانوي">الصف الثالث الثانوي</option>
+                    </select>
+                    <select id="st-track" required class="px-3.5 py-2.5 border rounded-xl bg-white text-sm outline-none font-bold text-teal-700">
+                        <option value="علمي علوم">مسار علمي علوم</option>
+                        <option value="علمي رياضة">مسار علمي رياضة</option>
+                        <option value="أدبي">مسار أدبي</option>
+                        <option value="عام (الصف الأول)">عام (الصف الأول)</option>
+                    </select>
+                    <input type="text" id="st-phone" placeholder="رقم هاتف ولي الأمر (واتساب)" required class="px-3.5 py-2.5 border rounded-xl text-sm outline-none">
+                    <input type="number" id="st-seat" placeholder="رقم الجلوس" class="px-3.5 py-2.5 border rounded-xl text-sm outline-none font-bold">
+                    <button type="submit" class="sm:col-span-2 lg:col-span-2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-xl text-sm transition shadow-lg shadow-teal-100">حفظ الطالب في قاعدة البيانات</button>
+                </form>
+            </div>
+
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-emerald-100 space-y-4">
+                <div class="flex flex-col sm:flex-row justify-between items-center gap-3">
+                    <h2 class="text-lg font-black text-gray-800">قائمةطلاب المدرسة وتوزيع الشعب</h2>
+                    <input type="text" id="student-search" oninput="renderStudents()" placeholder="ابحث باسم الطالب أو الرقم القومي..." class="w-full sm:w-72 px-4 py-2 border rounded-xl text-sm outline-none">
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-right text-sm">
+                        <thead class="bg-gray-50 border-b text-gray-500 text-xs">
+                            <tr>
+                                <th class="p-3">الكود / الجلوس</th>
+                                <th class="p-3">اسم الطالب</th>
+                                <th class="p-3">الصف الدراسي</th>
+                                <th class="p-3">الشعبة / المسار</th>
+                                <th class="p-3">هاتف ولي الأمر</th>
+                                <th class="p-3">إشعار الواتساب</th>
+                                <th class="p-3">إجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="students-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. شاشة الحضور والغياب اليومي -->
+        <div id="tab-attendance" class="tab-content space-y-6">
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-emerald-100">
+                <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
+                    <div>
+                        <h2 class="text-lg font-black text-gray-800">دفتر حضور وغياب الطلاب اليومي</h2>
+                        <p class="text-xs text-gray-400 mt-1">تحديد غياب وحضور الطلاب وإرسال رسائل فورية لأولياء الأمور.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="date" id="att-date" onchange="renderAttendanceTab()" class="px-3.5 py-2 border rounded-xl text-sm outline-none">
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-right text-sm">
+                        <thead class="bg-gray-50 border-b text-gray-500 text-xs">
+                            <tr>
+                                <th class="p-3">الكود</th>
+                                <th class="p-3">اسم الطالب</th>
+                                <th class="p-3">الصف والشعبة</th>
+                                <th class="p-3">حالة اليوم</th>
+                                <th class="p-3">تطبيق حالة الحضور</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attendance-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. شاشة المصروفات المدرسية (مدير فقط) -->
+        <div id="tab-fees" class="tab-content admin-only space-y-6">
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-emerald-100">
+                <h2 class="text-lg font-black text-gray-800 mb-4 flex items-center gap-2"><i class="fa-solid fa-coins text-emerald-600"></i> تحصيل المصروفات المدرسية والتبرعات الرسمية</h2>
+                <form onsubmit="saveFeeCollection(event)" class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                    <select id="fee-student-select" required class="px-3.5 py-2.5 border rounded-xl bg-white text-sm outline-none">
+                        <option value="">-- اختر الطالب --</option>
+                    </select>
+                    <select id="fee-category" required class="px-3.5 py-2.5 border rounded-xl bg-white text-sm outline-none">
+                        <option value="مصروفات كاملة">مصروفات كاملة (سديد)</option>
+                        <option value="أبناء شهداء / معفي">أبناء شهداء / معفي كلياً</option>
+                        <option value="تكافل وكرامة">أبناء تكافل وكرامة (تخفيض)</option>
+                        <option value="أبناء عاملين">أبناء عاملين بالتربية والتعليم</option>
+                    </select>
+                    <input type="number" step="0.01" id="fee-amount" placeholder="المبلغ المحصل (ج.م)" required class="px-3.5 py-2.5 border rounded-xl text-sm outline-none font-bold text-emerald-700">
+                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-sm transition shadow-md shadow-emerald-100">تحصيل وتوليد إيصال سداد</button>
+                </form>
+            </div>
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-emerald-100">
+                <h2 class="text-lg font-black text-gray-800 mb-4">سجل تحصيلات المصروفات المدرسية</h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-right text-sm">
+                        <thead class="bg-gray-50 border-b text-gray-500 text-xs">
+                            <tr><th class="p-3">التاريخ</th><th class="p-3">اسم الطالب</th><th class="p-3">الفئة والتخفيض</th><th class="p-3">المبلغ المحصل</th><th class="p-3">إجراءات</th></tr>
+                        </thead>
+                        <tbody id="fees-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. قاعدة بيانات المعلمين (مدير فقط) -->
+        <div id="tab-teachers" class="tab-content admin-only space-y-6">
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-emerald-100">
+                <h2 class="text-lg font-black text-gray-800 mb-4 flex items-center gap-2"><i class="fa-solid fa-chalkboard-user text-emerald-600"></i> تسجيل معلم جديد وصحيفة أحوال</h2>
+                <form onsubmit="saveTeacher(event)" class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                    <input type="text" id="t-name" placeholder="اسم المعلم ثلاثي / رباعي" required class="px-3.5 py-2.5 border rounded-xl text-sm outline-none">
+                    <input type="text" id="t-code" placeholder="كود المعلم" required class="px-3.5 py-2.5 border rounded-xl text-sm outline-none font-mono">
+                    <input type="text" id="t-subject" placeholder="مادة التدريس (مثل: علم نفس / لغة عربية)" required class="px-3.5 py-2.5 border rounded-xl text-sm outline-none">
+                    <select id="t-degree" required class="px-3.5 py-2.5 border rounded-xl bg-white text-sm outline-none">
+                        <option value="معلم كبیر">معلم كبير</option>
+                        <option value="معلم خبير">معلم خبير</option>
+                        <option value="معلم أول أ">معلم أول أ</option>
+                        <option value="معلم أول">معلم أول</option>
+                        <option value="معلم">معلم</option>
+                        <option value="أخصائي نفسي / اجتماعي">أخصائي نفسي / اجتماعي</option>
+                    </select>
+                    <button type="submit" class="sm:col-span-4 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-xl text-sm transition shadow-lg shadow-teal-100">حفظ بيانات المعلم في المدرسة</button>
+                </form>
+            </div>
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-emerald-100">
+                <h2 class="text-lg font-black text-gray-800 mb-4">قائمة هيئة التدريس والعاملين بالمدرسة</h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-right text-sm">
+                        <thead class="bg-gray-50 border-b text-gray-500 text-xs">
+                            <tr><th class="p-3">الكود</th><th class="p-3">اسم المعلم</th><th class="p-3">مادة التدريس</th><th class="p-3">الدرجة الوظيفية</th><th class="p-3">إجراءات</th></tr>
+                        </thead>
+                        <tbody id="teachers-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6. جرد الكتب والمستلزمات (مدير فقط) -->
+        <div id="tab-inventory" class="tab-content admin-only space-y-6">
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-emerald-100 space-y-4">
+                <h2 class="text-lg font-black text-gray-800 flex items-center gap-2"><i class="fa-solid fa-boxes-stacked text-emerald-600"></i> إضافة صنف بمخزن المدرسة (كتب / حواسب / أثاث)</h2>
+                <form id="inventory-form" onsubmit="saveInventoryItem(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                    <input type="text" id="inv-code" placeholder="كود الصنف / الكتاب" required class="px-3 py-2.5 border rounded-xl text-sm outline-none font-mono">
+                    <input type="text" id="inv-name" placeholder="اسم الصنف (مثل: كتاب علم النفس 3 ث)" required class="px-3 py-2.5 border rounded-xl text-sm outline-none">
+                    <select id="inv-category" required class="px-3 py-2.5 border rounded-xl bg-white text-sm outline-none">
+                        <option value="كتب مدرسية">كتب مدرسية</option>
+                        <option value="أجهزة معمل وحاسب">أجهزة معمل وحاسب</option>
+                        <option value="أثاث ومقاعد">أثاث ومقاعد مدرسية</option>
+                        <option value="أدوات نظافة وصيانة">أدوات نظافة وصيانة</option>
+                    </select>
+                    <input type="number" id="inv-qty" placeholder="الكمية المتاحة" required class="px-3 py-2.5 border rounded-xl text-sm outline-none">
+                    <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 rounded-xl text-sm transition shadow-md shadow-teal-100">حفظ في المستودع</button>
+                </form>
+            </div>
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-emerald-100">
+                <h2 class="text-lg font-black text-gray-800 mb-4">جرد عهدة المدرسة والمخزون</h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-right text-sm">
+                        <thead class="bg-gray-50 border-b text-gray-500 text-xs">
+                            <tr><th class="p-3">الكود</th><th class="p-3">اسم الصنف</th><th class="p-3">الفئة</th><th class="p-3">الكمية بالمخزن</th><th class="p-3">إجراءات</th></tr>
+                        </thead>
+                        <tbody id="inventory-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 7. المصروفات المدرسية والصيانة (مدير فقط) -->
+        <div id="tab-expenses" class="tab-content admin-only space-y-6">
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-emerald-100">
+                <h2 class="text-lg font-black text-gray-800 mb-4">تسجيل مصروفات صيانة ومستلزمات المبنى</h2>
+                <form onsubmit="saveExpense(event)" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <input type="text" id="exp-title" placeholder="بند الصرف (صيانة كهرباء، أدوات طابور...)" required class="px-3.5 py-2.5 border rounded-xl text-sm outline-none">
+                    <input type="number" step="0.01" id="exp-amount" placeholder="المبلغ (ج.م)" required class="px-3.5 py-2.5 border rounded-xl text-sm outline-none">
+                    <button type="submit" class="bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-xl text-sm transition shadow-md shadow-rose-100">خصم وحفظ المصروف</button>
+                </form>
+            </div>
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-emerald-100">
+                <h2 class="text-lg font-black text-gray-800 mb-4">سجل المصروفات المدرسية والصيانة</h2>
+                <table class="w-full text-right text-sm">
+                    <thead class="bg-gray-50 border-b text-gray-500 text-xs"><tr><th class="p-3">التاريخ</th><th class="p-3">البند</th><th class="p-3">المبلغ</th><th class="p-3">إجراءات</th></tr></thead>
+                    <tbody id="expenses-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 8. الإحصائيات المدرسية والرسوم البيانية (مدير فقط) -->
+        <div id="tab-reports" class="tab-content admin-only space-y-6">
+            <div class="bg-gradient-to-r from-emerald-700 to-teal-800 p-6 rounded-3xl shadow-lg text-white space-y-3">
+                <h3 class="text-lg font-black flex items-center gap-2"><i class="fa-solid fa-chart-line"></i> إحصائيات عامة عن المدرسة</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                    <div class="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20">
+                        <p class="text-xs text-emerald-100 font-bold">إجمالي طلاب الشعبة العلمية</p>
+                        <h4 id="rep-scientific-count" class="text-2xl font-black mt-1">0 طالب</h4>
+                    </div>
+                    <div class="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20">
+                        <p class="text-xs text-emerald-100 font-bold">إجمالي طلاب الشعبة الأدبية</p>
+                        <h4 id="rep-literary-count" class="text-2xl font-black mt-1">0 طالب</h4>
+                    </div>
+                    <div class="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20">
+                        <p class="text-xs text-emerald-100 font-bold">إجمالي المصروفات المحصلة</p>
+                        <h4 id="rep-fees-sum" class="text-2xl font-black mt-1">0.00 ج.م</h4>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white p-5 rounded-3xl shadow-sm border border-emerald-100">
+                    <h3 class="text-md font-black text-gray-800 mb-4">توزيع الطلاب حسب الشعبة والمسار</h3>
+                    <div class="h-64"><canvas id="schoolTrackChart"></canvas></div>
+                </div>
+                <div class="bg-white p-5 rounded-3xl shadow-sm border border-emerald-100 flex flex-col justify-between">
+                    <h3 class="text-md font-black text-gray-800 mb-4">النسخ الاحتياطي لبيانات المدرسة</h3>
+                    <div class="space-y-3">
+                        <button onclick="exportBackup()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl text-sm transition shadow-md shadow-blue-100">تصدير نسخة احتياطية (JSON)</button>
+                        <label class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-sm flex items-center justify-center cursor-pointer transition shadow-md shadow-emerald-100">
+                            استعادة نسخة احتياطية<input type="file" accept=".json" onchange="importBackup(event)" class="hidden">
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 9. إعدادات المدرسة (مدير فقط) -->
+        <div id="tab-settings" class="tab-content admin-only">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-emerald-100">
+                    <h2 class="text-lg font-black text-gray-800 mb-4">بيانات المدرسة الرسمية</h2>
+                    <form onsubmit="saveStoreSettings(event)" class="space-y-4">
+                        <input type="text" id="setting-store-name" placeholder="اسم المدرسة" required class="w-full px-3.5 py-2.5 border rounded-xl text-sm outline-none">
+                        <input type="text" id="setting-store-phone" placeholder="رقم هاتف إدارة المدرسة" class="w-full px-3.5 py-2.5 border rounded-xl text-sm outline-none">
+                        <input type="text" id="setting-store-currency" placeholder="العملة (ج.م)" required class="w-full px-3.5 py-2.5 border rounded-xl text-sm outline-none">
+                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-sm transition">حفظ الإعدادات</button>
+                    </form>
+                </div>
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-emerald-100">
+                    <h2 class="text-lg font-black text-gray-800 mb-4">تغيير كلمة سر مدير المدرسة (admin)</h2>
+                    <form onsubmit="changeAdminPassword(event)" class="space-y-4">
+                        <input type="password" id="old-admin-pass" placeholder="كلمة المرور الحالية" required class="w-full px-3.5 py-2.5 border rounded-xl text-sm outline-none">
+                        <input type="password" id="new-admin-pass" placeholder="كلمة المرور الجديدة" required class="w-full px-3.5 py-2.5 border rounded-xl text-sm outline-none">
+                        <input type="password" id="confirm-admin-pass" placeholder="تأكيد كلمة المرور" required class="w-full px-3.5 py-2.5 border rounded-xl text-sm outline-none">
+                        <button type="submit" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 rounded-xl text-sm transition">تحديث كلمة المرور</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- الأكواد البرمجية (JavaScript) -->
+    <script>
+        const VALID_LICENSE_KEYS = ["QAZZAZ-SCHOOL-2026-VIP", "DEMO-KEY-2026"];
+        let storeConfig = JSON.parse(localStorage.getItem('qazzaz_school_config')) || { name: "مدرسة معمل القزاز الثانوية المشتركة", phone: "01000000000", currency: "ج.م" };
+        let adminPassword = localStorage.getItem('qazzaz_school_admin_pass') || "1234";
+        
+        let currentUser = null;
+        let trackChartInstance = null;
+
+        function checkLicenseStatus() {
+            let key = localStorage.getItem('qazzaz_school_license_activated');
+            if (!key || !VALID_LICENSE_KEYS.includes(key)) {
+                document.getElementById('license-screen').classList.remove('hidden');
+            } else { applyStoreBranding(); }
+        }
+
+        function verifyAndActivateLicense() {
+            let key = document.getElementById('license-input').value.trim().toUpperCase();
+            if (VALID_LICENSE_KEYS.includes(key)) {
+                localStorage.setItem('qazzaz_school_license_activated', key);
+                document.getElementById('license-screen').classList.add('hidden');
+                alert('تم تفعيل نظام المدرسة بنجاح!');
+                applyStoreBranding();
+            } else { alert('مفتاح التفعيل غير صحيح!'); }
+        }
+
+        function applyStoreBranding() {
+            document.getElementById('page-title').innerText = storeConfig.name;
+            document.getElementById('header-store-name').innerHTML = `<i class="fa-solid fa-graduation-cap"></i> ${storeConfig.name}`;
+            document.getElementById('modal-store-name').innerText = storeConfig.name;
+            document.getElementById('setting-store-name').value = storeConfig.name;
+            document.getElementById('setting-store-phone').value = storeConfig.phone;
+            document.getElementById('setting-store-currency').value = storeConfig.currency;
+        }
+
+        function saveStoreSettings(e) {
+            e.preventDefault();
+            storeConfig.name = document.getElementById('setting-store-name').value.trim();
+            storeConfig.phone = document.getElementById('setting-store-phone').value.trim();
+            storeConfig.currency = document.getElementById('setting-store-currency').value.trim();
+            localStorage.setItem('qazzaz_school_config', JSON.stringify(storeConfig));
+            applyStoreBranding();
+            alert('تم الحفظ بنجاح!');
+        }
+
+        function changeAdminPassword(e) {
+            e.preventDefault();
+            let oldP = document.getElementById('old-admin-pass').value;
+            let newP = document.getElementById('new-admin-pass').value;
+            let confP = document.getElementById('confirm-admin-pass').value;
+            if (oldP !== adminPassword) { alert('كلمة المرور الحالية غير صحيحة!'); return; }
+            if (newP !== confP) { alert('كلمة المرور الجديدة غير متطابقة!'); return; }
+            adminPassword = newP;
+            localStorage.setItem('qazzaz_school_admin_pass', adminPassword);
+            alert('تم تغيير كلمة المرور بنجاح!');
+            document.getElementById('old-admin-pass').value = '';
+            document.getElementById('new-admin-pass').value = '';
+            document.getElementById('confirm-admin-pass').value = '';
+        }
+
+        let db = {
+            supervision: JSON.parse(localStorage.getItem('qazzaz_school_supervision')) || [
+                { id: 1, date: '2026-10-10', place: 'الفناء المدرسي', teacher: 'أ/ أخصائي محمد القزاز', notes: 'الانضباط التام بالطابور والفناء' },
+                { id: 2, date: '2026-10-10', place: 'البوابة الرئيسية', teacher: 'أ/ معلم أحمد علي', notes: 'التزام بمواعيد الدخول' }
+            ],
+            students: JSON.parse(localStorage.getItem('qazzaz_school_students')) || [
+                { id: "101", code: '3050101001', name: 'أحمد محمد عبد العال', grade: 'الصف الثالث الثانوي', track: 'علمي علوم', phone: '01012345678', seat: 1001 },
+                { id: "102", code: '3050101002', name: 'محمود إبراهيم القزاز', grade: 'الصف الثاني الثانوي', track: 'علمي رياضة', phone: '01098765432', seat: 1002 }
+            ],
+            teachers: JSON.parse(localStorage.getItem('qazzaz_school_teachers')) || [
+                { id: "T101", code: '20101', name: 'م / محمد عبدالوهاب القزاز', subject: 'علم النفس والتربية', degree: 'أخصائي نفسي / اجتماعي' }
+            ],
+            fees: JSON.parse(localStorage.getItem('qazzaz_school_fees')) || [],
+            inventory: JSON.parse(localStorage.getItem('qazzaz_school_inventory')) || [
+                { id: "INV-1", code: 'B-101', name: 'كتاب علم النفس والاجتماع 3 ث', category: 'كتب مدرسية', qty: 120 }
+            ],
+            expenses: JSON.parse(localStorage.getItem('qazzaz_school_expenses')) || [],
+            attendance: JSON.parse(localStorage.getItem('qazzaz_school_attendance')) || {}
+        };
+
+        function handleLogin(e) {
+            e.preventDefault();
+            let u = document.getElementById('login-username').value.trim();
+            let p = document.getElementById('login-password').value.trim();
+
+            if(u === 'admin' && p === adminPassword) {
+                currentUser = { name: 'مدير المدرسة', role: 'admin' };
+            } else {
+                let foundTeacher = db.teachers.find(t => t.code === u);
+                if(foundTeacher && p === '1234') {
+                    currentUser = { name: foundTeacher.name, role: 'teacher' };
+                } else {
+                    alert('اسم المستخدم أو كلمة المرور غير صحيحة!');
+                    return;
+                }
+            }
+
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('user-role-badge').innerText = `${currentUser.name} (${currentUser.role === 'admin' ? 'مدير المدرسة' : 'معلم / مشرف'})`;
+            
+            applyRolePermissions();
+            renderAll();
+            switchTab('supervision');
+        }
+
+        function applyRolePermissions() {
+            const adminElements = document.querySelectorAll('.admin-only');
+            adminElements.forEach(el => {
+                if (currentUser && currentUser.role === 'teacher') {
+                    el.style.display = 'none';
+                } else {
+                    el.style.display = '';
+                }
+            });
+        }
+
+        function logout() { 
+            currentUser = null;
+            document.getElementById('login-username').value = '';
+            document.getElementById('login-password').value = '';
+            document.getElementById('login-screen').style.display = 'flex'; 
+            document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
+        }
+
+        function saveData() {
+            localStorage.setItem('qazzaz_school_supervision', JSON.stringify(db.supervision));
+            localStorage.setItem('qazzaz_school_students', JSON.stringify(db.students));
+            localStorage.setItem('qazzaz_school_teachers', JSON.stringify(db.teachers));
+            localStorage.setItem('qazzaz_school_fees', JSON.stringify(db.fees));
+            localStorage.setItem('qazzaz_school_inventory', JSON.stringify(db.inventory));
+            localStorage.setItem('qazzaz_school_expenses', JSON.stringify(db.expenses));
+            localStorage.setItem('qazzaz_school_attendance', JSON.stringify(db.attendance));
+            renderAll();
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('bg-emerald-600', 'text-white', 'shadow-sm'));
+            document.getElementById('tab-' + tabId).classList.add('active');
+            let btn = document.getElementById('btn-' + tabId);
+            if(btn) btn.classList.add('bg-emerald-600', 'text-white', 'shadow-sm');
+            
+            if(tabId === 'supervision') renderSupervision();
+            if(tabId === 'students') renderStudents();
+            if(tabId === 'attendance') renderAttendanceTab();
+            if(tabId === 'fees') { renderFees(); renderStudentDropdown(); }
+            if(tabId === 'teachers') renderTeachers();
+            if(tabId === 'inventory') renderInventory();
+            if(tabId === 'expenses') renderExpenses();
+            if(tabId === 'reports') { updateReports(); renderTrackChart(); }
+        }
+
+        function renderAll() {
+            renderSupervision();
+            renderStudents();
+            renderTeachers();
+            renderFees();
+            renderInventory();
+            renderExpenses();
+            updateReports();
+            updateAdminStats();
+        }
+
+        function updateAdminStats() {
+            let totalStudents = db.students.length;
+            let activeSupervisors = db.supervision.length;
+            let totalFees = db.fees.reduce((s, x) => s + x.amount, 0);
+
+            document.getElementById('stat-total-students').innerText = `${totalStudents} طالب`;
+            document.getElementById('stat-active-supervisors').innerText = `${activeSupervisors} معلم`;
+            document.getElementById('stat-total-fees').innerText = totalFees.toFixed(2) + " " + storeConfig.currency;
+        }
+
+        function saveSupervision(e) {
+            e.preventDefault();
+            db.supervision.push({
+                id: Date.now(),
+                date: document.getElementById('sup-date').value,
+                place: document.getElementById('sup-place').value,
+                teacher: document.getElementById('sup-teacher').value.trim(),
+                notes: document.getElementById('sup-notes').value.trim() || 'لا توجد ملاحظات'
+            });
+            e.target.reset();
+            saveData();
+            alert('تم تسجيل جدول الإشراف والمناوبة بنجاح!');
+        }
+
+        function renderSupervision() {
+            let tbody = document.getElementById('supervision-table-body');
+            if(!tbody) return;
+            tbody.innerHTML = '';
+            if(db.supervision.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-400">لا توجد سجلات إشراف مدخلة</td></tr>`;
+                return;
+            }
+            db.supervision.slice().reverse().forEach(s => {
+                tbody.innerHTML += `
+                    <tr class="border-b">
+                        <td class="p-3 font-semibold text-emerald-700">${s.date}</td>
+                        <td class="p-3 font-bold text-gray-800">${s.place}</td>
+                        <td class="p-3 font-medium text-teal-800">${s.teacher}</td>
+                        <td class="p-3 text-xs text-gray-600">${s.notes}</td>
+                        <td class="p-3"><button onclick="db.supervision = db.supervision.filter(x => x.id !== ${s.id});saveData()" class="text-rose-500"><i class="fa-solid fa-trash"></i></button></td>
+                    </tr>`;
+            });
+        }
+
+        function saveStudent(e) {
+            e.preventDefault();
+            db.students.push({
+                id: Date.now().toString(),
+                code: document.getElementById('st-code').value.trim(),
+                name: document.getElementById('st-name').value.trim(),
+                grade: document.getElementById('st-grade').value,
+                track: document.getElementById('st-track').value,
+                phone: document.getElementById('st-phone').value.trim(),
+                seat: document.getElementById('st-seat').value.trim() || '-'
+            });
+            e.target.reset();
+            saveData();
+            alert('تم تسجيل الطالب وشعبته بنجاح!');
+        }
+
+        function renderStudents() {
+            let tbody = document.getElementById('students-table-body');
+            if(!tbody) return;
+            tbody.innerHTML = '';
+            let term = document.getElementById('student-search') ? document.getElementById('student-search').value.toLowerCase() : '';
+            let filtered = db.students.filter(s => s.name.toLowerCase().includes(term) || s.code.includes(term));
+
+            if(filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-gray-400">لا يوجد طلاب مطابقون للبحث</td></tr>`;
+                return;
+            }
+
+            filtered.forEach(s => {
+                let cleanPhone = s.phone.replace(/[^0-9]/g, '');
+                let waText = encodeURIComponent(`مرحباً ولي أمر الطالب (${s.name})، نود إحاطتكم بأنه مسجل بـ (${s.grade} - ${s.track}). إدارة ${storeConfig.name}.`);
+                let waLink = `https://wa.me/${cleanPhone}?text=${waText}`;
+
+                tbody.innerHTML += `
+                    <tr class="border-b">
+                        <td class="p-3 font-mono font-bold text-emerald-600">${s.code}<br><span class="text-xs text-gray-400 font-normal">جلوس: ${s.seat}</span></td>
+                        <td class="p-3 font-semibold text-gray-800">${s.name}</td>
+                        <td class="p-3 text-xs text-gray-600">${s.grade}</td>
+                        <td class="p-3 font-bold text-teal-700">${s.track}</td>
+                        <td class="p-3 font-mono text-xs">${s.phone}</td>
+                        <td class="p-3"><a href="${waLink}" target="_blank" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl text-xs inline-flex items-center gap-1"><i class="fa-brands fa-whatsapp"></i> إرسال إشعار</a></td>
+                        <td class="p-3"><button onclick="db.students = db.students.filter(x => x.id !== '${s.id}');saveData()" class="text-rose-500"><i class="fa-solid fa-trash"></i></button></td>
+                    </tr>`;
+            });
+        }
+
+        function renderAttendanceTab() {
+            let tbody = document.getElementById('attendance-table-body');
+            if(!tbody) return;
+            tbody.innerHTML = '';
+            let selectedDate = document.getElementById('att-date').value || new Date().toISOString().slice(0, 10);
+            document.getElementById('att-date').value = selectedDate;
+
+            if(!db.attendance[selectedDate]) db.attendance[selectedDate] = {};
+
+            db.students.forEach(s => {
+                let currentStatus = db.attendance[selectedDate][s.id] || 'حاضر';
+                let statusBadge = currentStatus === 'حاضر' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700';
+
+                tbody.innerHTML += `
+                    <tr class="border-b">
+                        <td class="p-3 font-mono text-emerald-600">${s.code}</td>
+                        <td class="p-3 font-semibold">${s.name}</td>
+                        <td class="p-3 text-xs text-gray-500">${s.grade} (${s.track})</td>
+                        <td class="p-3"><span class="px-3 py-1 rounded-full text-xs font-bold ${statusBadge}">${currentStatus}</span></td>
+                        <td class="p-3 flex gap-2">
+                            <button onclick="markAttendance('${selectedDate}', '${s.id}', 'حاضر')" class="bg-emerald-600 text-white px-3 py-1 rounded-lg text-xs font-bold">حاضر</button>
+                            <button onclick="markAttendance('${selectedDate}', '${s.id}', 'غائب')" class="bg-rose-600 text-white px-3 py-1 rounded-lg text-xs font-bold">غائب</button>
+                        </td>
+                    </tr>`;
+            });
+        }
+
+        function markAttendance(date, studentId, status) {
+            if(!db.attendance[date]) db.attendance[date] = {};
+            db.attendance[date][studentId] = status;
+            saveData();
+            renderAttendanceTab();
+        }
+
+        function renderStudentDropdown() {
+            let sel = document.getElementById('fee-student-select');
+            if(!sel) return;
+            sel.innerHTML = `<option value="">-- اختر الطالب --</option>`;
+            db.students.forEach(s => {
+                sel.innerHTML += `<option value="${s.name}">${s.name} (${s.grade})</option>`;
+            });
+        }
+
+        function saveFeeCollection(e) {
+            e.preventDefault();
+            db.fees.push({
+                id: Date.now(),
+                date: new Date().toLocaleDateString('ar-EG'),
+                student: document.getElementById('fee-student-select').value,
+                category: document.getElementById('fee-category').value,
+                amount: parseFloat(document.getElementById('fee-amount').value) || 0
+            });
+            e.target.reset();
+            saveData();
+            alert('تم تسجيل إيصال سداد المصروفات بنجاح!');
+        }
+
+        function renderFees() {
+            let tbody = document.getElementById('fees-table-body');
+            if(!tbody) return;
+            tbody.innerHTML = '';
+            db.fees.forEach(f => {
+                tbody.innerHTML += `
+                    <tr class="border-b">
+                        <td class="p-3 text-xs text-gray-500">${f.date}</td>
+                        <td class="p-3 font-semibold text-gray-800">${f.student}</td>
+                        <td class="p-3 font-bold text-teal-700">${f.category}</td>
+                        <td class="p-3 font-black text-emerald-600">${f.amount.toFixed(2)} ${storeConfig.currency}</td>
+                        <td class="p-3"><button onclick="db.fees = db.fees.filter(x => x.id !== ${f.id});saveData()" class="text-rose-500"><i class="fa-solid fa-trash"></i></button></td>
+                    </tr>`;
+            });
+        }
+
+        function saveTeacher(e) {
+            e.preventDefault();
+            db.teachers.push({
+                id: Date.now().toString(),
+                code: document.getElementById('t-code').value.trim(),
+                name: document.getElementById('t-name').value.trim(),
+                subject: document.getElementById('t-subject').value.trim(),
+                degree: document.getElementById('t-degree').value
+            });
+            e.target.reset();
+            saveData();
+            alert('تم تسجيل بيانات المعلم بنجاح!');
+        }
+
+        function renderTeachers() {
+            let tbody = document.getElementById('teachers-table-body');
+            if(!tbody) return;
+            tbody.innerHTML = '';
+            db.teachers.forEach(t => {
+                tbody.innerHTML += `
+                    <tr class="border-b">
+                        <td class="p-3 font-mono text-emerald-600 font-bold">${t.code}</td>
+                        <td class="p-3 font-semibold text-gray-800">${t.name}</td>
+                        <td class="p-3 text-sm font-bold text-teal-700">${t.subject}</td>
+                        <td class="p-3 text-xs font-bold text-blue-700 bg-blue-50 rounded-lg">${t.degree}</td>
+                        <td class="p-3"><button onclick="db.teachers = db.teachers.filter(x => x.id !== '${t.id}');saveData()" class="text-rose-500"><i class="fa-solid fa-trash"></i></button></td>
+                    </tr>`;
+            });
+        }
+
+        function saveInventoryItem(e) {
+            e.preventDefault();
+            db.inventory.push({
+                id: Date.now().toString(),
+                code: document.getElementById('inv-code').value.trim(),
+                name: document.getElementById('inv-name').value.trim(),
+                category: document.getElementById('inv-category').value,
+                qty: parseInt(document.getElementById('inv-qty').value) || 0
+            });
+            e.target.reset();
+            saveData();
+            alert('تم حفظ الصنف بالعهد والمستودع المدرسي!');
+        }
+
+        function renderInventory() {
+            let tbody = document.getElementById('inventory-table-body');
+            if(!tbody) return;
+            tbody.innerHTML = '';
+            db.inventory.forEach(inv => {
+                tbody.innerHTML += `
+                    <tr class="border-b">
+                        <td class="p-3 font-mono font-bold text-emerald-600">${inv.code}</td>
+                        <td class="p-3 font-semibold">${inv.name}</td>
+                        <td class="p-3 text-xs text-gray-500">${inv.category}</td>
+                        <td class="p-3 font-bold text-teal-700">${inv.qty}</td>
+                        <td class="p-3"><button onclick="db.inventory = db.inventory.filter(x => x.id !== '${inv.id}');saveData()" class="text-rose-500"><i class="fa-solid fa-trash"></i></button></td>
+                    </tr>`;
+            });
+        }
+
+        function saveExpense(e) {
+            e.preventDefault();
+            db.expenses.push({ id: Date.now(), date: new Date().toLocaleDateString('ar-EG'), title: document.getElementById('exp-title').value, amount: parseFloat(document.getElementById('exp-amount').value) });
+            e.target.reset(); saveData(); alert('تم حفظ المصروفات المدرسية!');
+        }
+
+        function renderExpenses() {
+            let tbody = document.getElementById('expenses-table-body');
+            if(!tbody) return;
+            tbody.innerHTML = '';
+            db.expenses.forEach(ex => {
+                tbody.innerHTML += `<tr class="border-b"><td class="p-3">${ex.date}</td><td class="p-3 font-medium">${ex.title}</td><td class="p-3 text-rose-600 font-bold">${ex.amount.toFixed(2)} ${storeConfig.currency}</td><td class="p-3"><button onclick="db.expenses = db.expenses.filter(x => x.id !== ${ex.id});saveData()" class="text-rose-500"><i class="fa-solid fa-trash"></i></button></td></tr>`;
+            });
+        }
+
+        function updateReports() {
+            let scientificCount = db.students.filter(s => s.track.includes('علمي')).length;
+            let literaryCount = db.students.filter(s => s.track.includes('أدبي')).length;
+            let feesSum = db.fees.reduce((s, x) => s + x.amount, 0);
+
+            document.getElementById('rep-scientific-count').innerText = `${scientificCount} طالب`;
+            document.getElementById('rep-literary-count').innerText = `${literaryCount} طالب`;
+            document.getElementById('rep-fees-sum').innerText = feesSum.toFixed(2) + " " + storeConfig.currency;
+        }
+
+        function renderTrackChart() {
+            let ctx = document.getElementById('schoolTrackChart');
+            if(!ctx) return;
+            let sci = db.students.filter(s => s.track.includes('علمي علوم')).length;
+            let math = db.students.filter(s => s.track.includes('علمي رياضة')).length;
+            let lit = db.students.filter(s => s.track.includes('أدبي')).length;
+            let gen = db.students.filter(s => s.track.includes('عام')).length;
+
+            if (trackChartInstance) trackChartInstance.destroy();
+
+            trackChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['علمي علوم', 'علمي رياضة', 'أدبي', 'عام (أولى ثانوي)'],
+                    datasets: [{
+                        data: [sci, math, lit, gen],
+                        backgroundColor: ['#059669', '#0284c7', '#d97706', '#6b7280']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+
+        function exportBackup() {
+            let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db));
+            let dl = document.createElement('a'); dl.setAttribute("href", dataStr); dl.setAttribute("download", "School_Official_Backup.json");
+            document.body.appendChild(dl); dl.click(); dl.remove();
+        }
+
+        function importBackup(e) {
+            let f = e.target.files[0]; if(!f) return;
+            let r = new FileReader();
+            r.onload = function(evt) {
+                try {
+                    let imp = JSON.parse(evt.target.result);
+                    if(imp.students) { db = imp; saveData(); alert('تمت استعادة بيانات المدرسة بنجاح!'); }
+                } catch(err) { alert('الملف غير صالح!'); }
+            };
+            r.readAsText(f);
+        }
+
+        window.onload = function() { checkLicenseStatus(); };
+    </script>
+</body>
+</html>
 
